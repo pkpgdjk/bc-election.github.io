@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="./css/bootstrap.css">
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/all.min.css">
+
+
+
+  <!-- Optional JavaScript -->
+  <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+  <script src="./js/jquery-3.4.1.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
+    integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
+    crossorigin="anonymous"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
+    integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+    crossorigin="anonymous"></script>
+  <script src="./js/web3-1.0.0-beta.36.min.js"></script>
+  <script src="./js/web3Connection.js"></script>
+  <script>
+
+
+
+    //private network
+    // const factoryAddress = '0x2F92335775b043b9E4078a45FEeB8f39c31b4fE4'
+    // const web3 = new Web3();
+    // const provider = new web3.providers.HttpProvider('http://localhost:7545')
+    // web3.setProvider(provider)
+    //using meta mask
+    const provider = window.web3.currentProvider;
+
+    const web3 = new Web3(provider);
+    const factoryAddress = '0x9E273f714929aB2C423744ed2ae90115829E3bdC'
+    var factory;
+    var ACCOUNTS;
+
+    setupContract = async () => {
+      json = await $.getJSON("./abi/VoteFactory.json");
+      factoryAbi = JSON.parse(JSON.stringify(json['interface']))
+      factoryAbi = JSON.parse(factoryAbi);
+      factory = new web3.eth.Contract(factoryAbi, factoryAddress);
+      ACCOUNTS = await web3.eth.getAccounts();
+    }
+
+    getAllVote = async () => {
+      const votes = await factory.methods.getDeployedVotes().call();
+      json = await $.getJSON("./abi/Vote.json");
+      voteAbi = JSON.parse(JSON.stringify(json['interface']))
+      voteAbi = JSON.parse(voteAbi);
+      if (votes) {
+        for (let i = 0; i < votes.length; i++) {
+          let VOTE = await new web3.eth.Contract(voteAbi, votes[i].addr);
+          const vote_name = votes[i].name;
+          const description = votes[i].desc;
+          const manager = votes[i].manager;
+          const complete = await VOTE.methods.complete().call();
+
+          console.log("VOTE::", vote_name, description, complete, votes[i].addr)
+
+          addVoteToTable(i, vote_name, description, complete, votes[i].addr, manager);
+        }
+      }
+    }
+
+
+
+    addVoteToTable = (index, vote_name, description, complete, address, manager) => {
+      $("#table-tbody").append(`
+              <tr>
+                <th scope="row">${index + 1}</th>
+                <td>${manager === ACCOUNTS[0] ? '<i class="fa fa-user-tie mx-2"/>' : ''}${vote_name}</td>
+                <td class="text-${complete ? "danger" : "success"}">${complete ? "ปิดหีบแล้ว" : "เปิดให้เลือก"}</td>
+                <td>
+                    <a class="btn btn-${complete ? "success" : "warning"} btn-sm text-light" href="./detail.html?addr=${address}">${complete ? " <i class='fa fa-poll'/> ดูผลการเลือกตั้ง " : " <i class='fa fa-check-square'/> ไปหน้าเลือกตั้ง "}</button>
+                </td>
+              </tr>
+          `)
+    }
+
+    const addCandidateInput = () => {
+      $("#candidate").append(`
+              <div class="candidate-input d-flex justify-content-around align-items-center">
+                <input class="form-control my-2 candidate-name">
+                <i class="fa fa-times mx-3" onclick="removeCandidate(this)"></i>
+              </div>
+          `)
+    }
+
+    const removeCandidate = (element) => {
+      $(element).parent().remove()
+    }
+
+    const addElection = async () => {
+      let name = $("#electionName").val();
+      let desc = $("#electionDesc").val();
+      let candidate = $(".candidate-name")
+      let canName = [];
+
+      for (let i = 0; i < candidate.length; i++) {
+        if (!/^[a-zA-Z0-9 .-_]{1,32}$/.test($(candidate[i]).val())) {
+          alert('ชื่อผู้ลงสมัคร สามารถกรอกได้แค่ตัวอักษรภาษาอังกฤษและตัวเลข ไม่เกิน 32 ตัวเท่านั้น')
+          return;
+        }
+        if (!$(candidate[i]).val()) i++;
+
+        canName.push(web3.utils.fromAscii($(candidate[i]).val()))
+      }
+
+      $("#btnAddVote").html("Loading...")
+      try {
+        await factory.methods.createVote(name, desc, canName).send({
+          from: ACCOUNTS[0],
+          gas: '3000000'
+        });
+        window.location.reload();
+      } catch (error) {
+        console.log(error)
+        alert(error)
+      }
+
+    }
+
+    init = async () => {
+      await setupContract();
+      await getAllVote();
+    }
+
+
+    init()
+  </script>
+
+  <title>VOTE</title>
+</head>
+
+<body>
+  <div class="background-image"></div>
+  <div class="container mt-5">
+    <div class="row pt-2">
+      <div class="col-md-12 d-flex justify-content-between">
+        <h2>สำนักงานคณะกรรมการการเลือกตั้ง ประเทศไทย</h2>
+        <button class="btn btn-primary" data-toggle="modal" data-target="#addModal" id="btnOpenAddVote">
+          <!-- <i class="fas fa-plus"></i> -->
+          <i class="fa fa-plus-circle"></i> เพิ่มการเลือกตั้ง
+        </button>
+      </div>
+    </div>
+
+    <div class="row pt-5">
+      <div class="col-md-12">
+        <div class="table-vote">
+          <p>รายชื่อการเลือกตั้งทั้งหมด</p>
+          <table class="table table-striped table-hover">
+            <thead class="">
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">ชื่อการเลือกตั้ง</th>
+                <th scope="col">สถานะ</th>
+                <th scope="col"></th>
+              </tr>
+            </thead>
+            <tbody id="table-tbody">
+
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+
+
+
+    <div class="modal fade" id="addModal" tabindex="-1" role="dialog" aria-labelledby="addModalTitle"
+      aria-hidden="true">
+      <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="addModalTitle">เพิ่มการเลือกตั้ง</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <form>
+              <div class="form-group">
+                <label for="electionName">ชื่อการเลือกตั้ง</label>
+                <input type="text" class="form-control" id="electionName">
+              </div>
+              <div class="form-group">
+                <label for="electionDesc">คำอธิบาย</label>
+                <textarea class="form-control" id="electionDesc"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="candidate"> รายชื่อผู้เข้าสมัครลงเลือกตั้ง <i class="text-muted">( ภาษาอังกฤษเท่านั้น )</i></label>
+                <div id="candidate">
+
+                </div>
+              </div>
+            </form>
+            <div class="text-center">
+              <button class="btn btn-info w-25" onclick="addCandidateInput()" style="font-size: 1.5em;"><i
+                  class="fa fa-plus"></i></button>
+            </div>
+          </div>
+          <div class="modal-footer justify-content-center">
+            <button type="button" class="btn btn-secondary w-25" data-dismiss="modal"><i class="fa fa-times mx-2"></i>
+              ปิด</button>
+            <button type="button" id="btnAddVote" class="btn btn-primary w-25" onclick="addElection()"><i
+                class="fa fa-save mx-2"></i>เพิ่ม</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+  </div>
+
+</body>
+
+</html>

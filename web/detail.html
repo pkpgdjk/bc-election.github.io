@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="./css/bootstrap.css">
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/all.min.css">
+
+
+
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="./js/jquery-3.4.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
+        integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
+        crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
+        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+        crossorigin="anonymous"></script>
+    <script src="./js/web3-1.0.0-beta.36.min.js"></script>
+    <script src="./js/web3Connection.js"></script>
+
+    <script>
+        const voteAddress = window.location.search.split("=")[1]
+
+        //private network
+
+        // const web3 = new Web3();
+        // const provider = new web3.providers.HttpProvider('http://localhost:7545')
+        // web3.setProvider(provider)
+        // using meta mask
+        const provider = window.web3.currentProvider;
+
+        const web3 = new Web3(provider);
+
+
+        let VOTE;
+        let ACCOUNTS;
+        let MANAGER;
+        let ELECTOR;
+        let IS_COMPLETE;
+        let IS_VOTED;
+
+        setupContract = async () => {
+            if (!voteAddress) window.history.back()
+            json = await $.getJSON("./abi/Vote.json");
+            voteAbi = JSON.parse(JSON.stringify(json['interface']))
+            voteAbi = JSON.parse(voteAbi);
+            VOTE = new web3.eth.Contract(voteAbi, voteAddress);
+            ACCOUNTS = await web3.eth.getAccounts();
+        }
+
+        vote = async (index) => {
+            $(".btnVoteGroup").each(function (i) {
+                if(i === index){
+                    $(this).html(`<button class="btn btn-success btn-sm" onclick="vote(${i})" disabled> Loading... </button>`)
+                }else{
+                    $(this).html(`<button class="btn btn-success btn-sm" onclick="vote(${i})" disabled><b class="text-warning">+1</b> โหวต </button>`)
+                }
+            });
+            try {
+                await VOTE.methods.vote_candidate(index).send({
+                    from: ACCOUNTS[0],
+                    gas: '3000000'
+                });
+                alert("เลือกเรียบร้อยแล้ว")
+                window.location.reload();
+            } catch (error) {
+                console.log(error)
+                alert(error)
+            }
+        }
+
+        closeVote = async () => {
+            alert("ปิดการเลือกตั้งเรียบร้อยแล้ว")
+            try {
+                await VOTE.methods.close_vote().send({
+                    from: ACCOUNTS[0],
+                    gas: '3000000'
+                });
+                alert("ปิดการเลือกตั้งเรียบร้อยแล้ว")
+                window.location.reload();
+            } catch (error) {
+                console.log(error)
+                alert(error)
+            }
+        }
+
+        getVoteDetail = async () => {
+            const vote_name = await VOTE.methods.namevote().call();
+            const description = await VOTE.methods.description().call();
+            const candidate_list = await VOTE.methods.getCandidate().call();
+            MANAGER = await VOTE.methods.manager().call();
+            // ELECTOR = await VOTE.methods.elector().call();
+            IS_COMPLETE = await VOTE.methods.complete().call();
+            IS_VOTED = await VOTE.methods.elector(ACCOUNTS[0]).call();
+
+            $("#vote-name").html(vote_name);
+            $("#vote-desc").html('<i>' + description + '</i>');
+            $("#vote-status").html(IS_COMPLETE ? "ปิดหีบเลือกตั้งแล้ว" : "เปิดให้เลือกตั้ง");
+            $("#vote-status").addClass(IS_COMPLETE ? "text-danger" : "text-success");
+
+            if (MANAGER === ACCOUNTS[0] && !IS_COMPLETE) {
+                $("#btnCloseVote").show();
+            } else {
+                $("#btnCloseVote").hide();
+            }
+
+            if (IS_COMPLETE) {
+                let maxScorce = 0;
+                let winnerName = []
+                for (let i = 0; i < candidate_list.length; i++) {
+                    let c_score = candidate_list[i].candidate_score;
+                    let c_name = candidate_list[i].candidate_name;
+
+                    if (c_score >= maxScorce) {
+                        if (c_score === maxScorce) {
+                            winnerName.push(web3.utils.toAscii(c_name));
+                        } else {
+                            winnerName = [web3.utils.toAscii(c_name)];
+                        }
+                        maxScorce = c_score;
+                    }
+                }
+                $("#vote-winner").html(`คุณ <br>${winnerName.join(",")} <br> ได้คะแนนสูงสุดในการเลือกตั้ง`)
+            }
+
+            for (let i = 0; i < candidate_list.length; i++) {
+                $("#table-tbody").append(`
+                         <tr>
+                            <th scope="row">${i + 1}</th>
+                            <td>${web3.utils.toAscii(candidate_list[i].candidate_name)}</td>
+                            <td class="btnVoteGroup">
+                                ${(() => {
+                        if (IS_VOTED && !IS_COMPLETE) {
+                            return "<span class='text-muted'>คุณได้เลือกไปแล้วกรุณารอฟังผล <i class='fa fa-comments'></i></span>"
+                        } else if (IS_COMPLETE) {
+                            return `<span class="text-success"> ได้ ${candidate_list[i].candidate_score} คะแนน</span>`
+                        } else {
+                            return `<button class="btn btn-success btn-sm" onclick="vote(${i})"><b class="text-warning">+1</b> โหวต </button>`
+                        }
+                    })()}
+                            </td>
+                        </tr>
+                `)
+            }
+
+            console.log(vote_name, description, candidate_list, IS_VOTED);
+        }
+
+
+
+
+        init = async () => {
+            await setupContract();
+            await getVoteDetail();
+        }
+
+
+        init()
+    </script>
+
+    <title>VOTE</title>
+</head>
+
+<body>
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-md-12">
+                <h2 id="vote-name"></h2>
+                <p id="vote-desc" class="text-muted"></p>
+                <p>สถานะ : <span id="vote-status"></span> </p>
+                <h3 class="text-success text-center" id="vote-winner"> </h3>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="table-vote">
+                    <div class="d-flex justify-content-between align-items-center py-4">
+                        <span>รายชื่อการผู้เข้าสมัครรับเลือกตั้ง <i class="fas fa-users mx-2"></i></span>
+                        <button class="btn btn-danger" id="btnCloseVote" style="display: none;" onclick="closeVote()"><i
+                                class="fas fa-times mx-2"></i> ปิดการลงคะแนน</button>
+                    </div>
+                    <table class="table table-striped table-hover">
+                        <thead class="">
+                            <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">ชื่อ - นามสกุล</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-tbody">
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <button href="./../" class="btn btn-secondary px-4 mt-3" onclick="window.history.back()"><i
+                class="fas fa-arrow-alt-circle-left"></i> กลับ</button>
+
+
+    </div>
+
+</body>
+
+</html>

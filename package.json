@@ -1,0 +1,21 @@
+{
+  "name": "campaign",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "fs-extra": "^8.1.0",
+    "ganache-cli": "^6.7.0",
+    "mocha": "^6.2.2",
+    "solc": "0.4.25",
+    "truffle-hdwallet-provider": "^1.0.17",
+    "web3": "^1.2.2"
+  },
+  "scripts": {
+    "test": "mocha",
+    "compile": "node ./ethereum/compile",
+    "deploy-local": "export DEPLOY=LOCAL && node ./ethereum/deploy",
+    "deploy": "export DEPLOY=RINKEBY && node ./ethereum/deploy",
+    "web": "python -m SimpleHTTPServer 8080"
+  }
+}

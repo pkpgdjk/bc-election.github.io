@@ -1,0 +1,20 @@
+.candidate-input > i{
+  cursor: pointer;
+}
+
+body { 
+  background: url('../img/bg.png') no-repeat center center fixed; 
+  -webkit-background-size: cover;
+  -moz-background-size: cover;
+  -o-background-size: cover;
+  background-size: cover;
+}
+
+.container{
+  background-color: white;
+    padding: 25px;
+    border-radius: 7px;
+    margin-top: 20px;
+    box-shadow: #00000052 0px 0px 10px;
+}
+
